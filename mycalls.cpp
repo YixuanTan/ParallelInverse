@@ -2,8 +2,6 @@
  %% PETSc behind the scenes maintenance functions
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
 #include "mycalls.hpp"
-#include <stdlib.h>
-#include <iostream>
 #include "petscmat.h"
 #include <petscksp.h>
 
@@ -41,12 +39,7 @@ void Vec_Create(PETSC_STRUCT *obj, PetscInt m)
     ierr = VecDuplicate(obj->rhs, &obj->sol); //CHKERRQ(ierr);
     
    ierr = VecDuplicate(obj->rhs, &obj->current_temperature_field_local);
-//    ierr = VecCreate(PETSC_COMM_WORLD, &obj->current_temperature_field_local);
-//    ierr = VecSetSizes(obj->current_temperature_field_local, PETSC_DECIDE, m);
-//    ierr = VecSetFromOptions(obj->current_temperature_field_local);
     
-//    ierr = VecSetOption(obj->rhs, VEC_IGNORE_OFF_PROC_ENTRIES); // assembling rhs may need info from other rank
-//    ierr = VecSetOption(obj->sol, VEC_IGNORE_OFF_PROC_ENTRIES);
     ierr = VecSetOption(obj->current_temperature_field_local, VEC_IGNORE_OFF_PROC_ENTRIES);
     
     return;
@@ -59,18 +52,10 @@ void Mat_Create(PETSC_STRUCT *obj, PetscInt m, PetscInt n, PetscInt num_of_heate
     PetscErrorCode ierr;
     ierr = MatCreate(PETSC_COMM_WORLD, &obj->Amat);
     ierr = MatSetSizes(obj->Amat,PETSC_DECIDE,PETSC_DECIDE,m,n);
-    //ierr = MatSetFromOptions(obj->Amat);
     ierr = MatSetType(obj->Amat, MATMPIAIJ);
-    // d_nz <= 9  o_nz <=8 (at least one at the diagonal)
-//    ierr = MatMPIAIJSetPreallocation(obj->Amat, 9, d_nnz, 8, o_nnz);
-    
-    //    MatCreateMPIAIJ(PETSC_COMM_WORLD, PETSC_DECIDE, PETSC_DECIDE, m, n, 9, PETSC_NULL, 9, PETSC_NULL, obj->Amat);
-
-//    ierr = MatDuplicate(obj->Amat, MAT_DO_NOT_COPY_VALUES, &obj->stiffness_matrix);
 
     ierr = MatCreate(PETSC_COMM_WORLD, &obj->stiffness_matrix);
     ierr = MatSetSizes(obj->stiffness_matrix,PETSC_DECIDE,PETSC_DECIDE,m,n);
-//    ierr = MatSetFromOptions(obj->stiffness_matrix);
     ierr = MatSetType(obj->stiffness_matrix, MATMPIAIJ);
     // d_nz <= 9  o_nz <=8 (at least one at the diagonal)
 //    ierr = MatMPIAIJSetPreallocation(obj->stiffness_matrix, 9, d_nnz, 8, o_nnz);
@@ -107,7 +92,6 @@ void Petsc_Solve(PETSC_STRUCT *obj)
     // DIFFERENT_NONZERO_PATTERN or SAME_NONZERO_PATTERN does not change the solution. TESTED.
     ierr = KSPSetOperators(obj->ksp,obj->Amat,obj->Amat, SAME_NONZERO_PATTERN); //CHKERRQ(ierr);
     ierr = KSPGetPC(obj->ksp,&obj->pc); //CHKERRQ(ierr);
-//    ierr = PCSetType(obj->pc,PCNONE); //CHKERRQ(ierr);
     ierr = PCSetType(obj->pc,PCBJACOBI);
     ierr = KSPSetTolerances(obj->ksp,1.e-7,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT); //CHKERRQ(ierr);
     ierr = KSPSetFromOptions(obj->ksp); //CHKERRQ(ierr);
@@ -153,8 +137,6 @@ void Petsc_Assem_Vectors(PETSC_STRUCT *obj)
     
     ierr = VecAssemblyBegin(obj->current_temperature_field_local); //CHKERRQ(ierr);
     ierr = VecAssemblyEnd(obj->current_temperature_field_local); //CHKERRQ(ierr);
-//    ierr = VecAssemblyBegin(obj->initial_temperature_field);
-//    ierr = VecAssemblyEnd(obj->initial_temperature_field);
 
     return;
 }
@@ -227,23 +209,16 @@ void Assem_Inverse(PETSC_STRUCT *obj)
     PetscErrorCode ierr;
     ierr = MatAssemblyBegin(obj->S_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
     ierr = MatAssemblyEnd(obj->S_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
-  
-    //R_matrix only needs to be asembled once, so assembling R_matrix is done separately
-//    ierr = MatAssemblyBegin(obj->R_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
-//    ierr = MatAssemblyEnd(obj->R_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
     
     ierr = MatAssemblyBegin(obj->RSRS_regularized_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
     ierr = MatAssemblyEnd(obj->RSRS_regularized_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
 
     //Indicate same nonzero structure of successive linear system matrices
     ierr = MatSetOption(obj->S_matrix, MAT_NO_NEW_NONZERO_LOCATIONS);
-//    ierr = MatSetOption(obj->R_matrix, MAT_NO_NEW_NONZERO_LOCATIONS);
     ierr = MatSetOption(obj->RSRS_regularized_matrix, MAT_NO_NEW_NONZERO_LOCATIONS);
 
     ierr = VecAssemblyBegin(obj->rhs_inverse); //CHKERRQ(ierr);
     ierr = VecAssemblyEnd(obj->rhs_inverse); //CHKERRQ(ierr);
- //   ierr = VecAssemblyBegin(obj->heat_generation_increment_local); //CHKERRQ(ierr);
- //   ierr = VecAssemblyEnd(obj->heat_generation_increment_local); //CHKERRQ(ierr);
 
     return;
 }
@@ -255,10 +230,8 @@ void Petsc_Solve_Inverse(PETSC_STRUCT *obj)
     PetscErrorCode ierr;
     ierr = KSPCreate(PETSC_COMM_WORLD,&obj->ksp_inverse); //CHKERRQ(ierr);
     
-    // DIFFERENT_NONZERO_PATTERN or SAME_NONZERO_PATTERN does not change the solution. TESTED.
     ierr = KSPSetOperators(obj->ksp_inverse, obj->RSRS_regularized_matrix, obj->RSRS_regularized_matrix, DIFFERENT_NONZERO_PATTERN); //CHKERRQ(ierr);
     ierr = KSPGetPC(obj->ksp_inverse,&obj->pc_inverse); //CHKERRQ(ierr);
-    //    ierr = PCSetType(obj->pc,PCNONE); //CHKERRQ(ierr);
     ierr = PCSetType(obj->pc_inverse,PCJACOBI);
     ierr = KSPSetTolerances(obj->ksp_inverse,1.e-7,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT); //CHKERRQ(ierr);
     ierr = KSPSetFromOptions(obj->ksp_inverse); //CHKERRQ(ierr);
@@ -279,7 +252,6 @@ void Petsc_Destroy_Inverse(PETSC_STRUCT *obj)
     ierr = MatDestroy(obj->S_matrix); //CHKERRQ(ierr);
     ierr = MatDestroy(obj->RSRS_regularized_matrix); //CHKERRQ(ierr);
     ierr = VecDestroy(obj->rhs_inverse); //CHKERRQ(ierr);
-//    ierr = VecDestroy(obj->heat_generation_increment_local); //CHKERRQ(ierr);
 
     return;
 }
