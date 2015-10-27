@@ -54,7 +54,7 @@ void Vec_Create(PETSC_STRUCT *obj, PetscInt m)
 /*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
  %% Function to create the system matrix
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
-void Mat_Create(PETSC_STRUCT *obj, PetscInt m, PetscInt n)
+void Mat_Create(PETSC_STRUCT *obj, PetscInt m, PetscInt n, PetscInt num_of_heaters)
 {
     PetscErrorCode ierr;
     ierr = MatCreate(PETSC_COMM_WORLD, &obj->Amat);
@@ -74,6 +74,11 @@ void Mat_Create(PETSC_STRUCT *obj, PetscInt m, PetscInt n)
     ierr = MatSetType(obj->stiffness_matrix, MATMPIAIJ);
     // d_nz <= 9  o_nz <=8 (at least one at the diagonal)
 //    ierr = MatMPIAIJSetPreallocation(obj->stiffness_matrix, 9, d_nnz, 8, o_nnz);
+
+    // heat_matrix is added for the inverse analysis purpose
+    ierr = MatCreate(PETSC_COMM_WORLD, &obj->heat_matrix);
+    ierr = MatSetSizes(obj->heat_matrix,PETSC_DECIDE,PETSC_DECIDE,m,num_of_heaters);
+    ierr = MatSetFromOptions(obj->heat_matrix);
 
     return;
 }
@@ -123,12 +128,16 @@ void Petsc_Assem_Matrices(PETSC_STRUCT *obj)
     ierr = MatAssemblyBegin(obj->stiffness_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
     ierr = MatAssemblyEnd(obj->stiffness_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
     
+    ierr = MatAssemblyBegin(obj->heat_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
+    ierr = MatAssemblyEnd(obj->heat_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
+
     //Indicate same nonzero structure of successive linear system matrices
-    MatSetOption(obj->Amat, MAT_NO_NEW_NONZERO_LOCATIONS);
-    MatSetOption(obj->stiffness_matrix, MAT_NO_NEW_NONZERO_LOCATIONS);
-    
-    MatSetOption(obj->Amat, MAT_SYMMETRIC);
-    MatSetOption(obj->stiffness_matrix, MAT_SYMMETRIC);
+    ierr = MatSetOption(obj->Amat, MAT_NO_NEW_NONZERO_LOCATIONS);
+    ierr = MatSetOption(obj->stiffness_matrix, MAT_NO_NEW_NONZERO_LOCATIONS);
+    ierr = MatSetOption(obj->heat_matrix, MAT_NO_NEW_NONZERO_LOCATIONS);
+
+    ierr = MatSetOption(obj->Amat, MAT_SYMMETRIC);
+    ierr = MatSetOption(obj->stiffness_matrix, MAT_SYMMETRIC);
 
     return;
 }
@@ -164,6 +173,7 @@ void Petsc_Destroy(PETSC_STRUCT *obj)
 
     ierr = VecDestroy(obj->current_temperature_field_local);
     ierr = MatDestroy(obj->stiffness_matrix); //CHKERRQ(ierr);
+    ierr = MatDestroy(obj->heat_matrix); //CHKERRQ(ierr);
 
     return;
 }
@@ -198,22 +208,14 @@ void Create_Inverse(PETSC_STRUCT *obj, PetscInt num_of_equations, PetscInt num_o
     ierr = MatSetSizes(obj->R_matrix,PETSC_DECIDE,PETSC_DECIDE,num_of_surfacenodes,num_of_equations);
     ierr = MatSetFromOptions(obj->R_matrix);
     
-    ierr = MatCreate(PETSC_COMM_WORLD, &obj->RS_matrix);
-    ierr = MatSetSizes(obj->RS_matrix,PETSC_DECIDE,PETSC_DECIDE,num_of_surfacenodes,num_of_heaters);
-    ierr = MatSetFromOptions(obj->RSRS_regularized_matrix);
-
     ierr = MatCreate(PETSC_COMM_WORLD, &obj->RSRS_regularized_matrix);
-    ierr = MatSetSizes(obj->RSRS_regularized_matrix,PETSC_DECIDE,PETSC_DECIDE,num_of_heaters,num_of_heaters);
+    ierr = MatSetSizes(obj->RSRS_regularized_matrix,PETSC_DECIDE,PETSC_DECIDE,num_of_surfacenodes,num_of_heaters);
     ierr = MatSetFromOptions(obj->RSRS_regularized_matrix);
     
     ierr = VecCreate(PETSC_COMM_WORLD, &obj->rhs_inverse); //CHKERRQ(ierr);
     ierr = VecSetSizes(obj->rhs_inverse, PETSC_DECIDE, num_of_heaters); //CHKERRQ(ierr);
     ierr = VecSetFromOptions(obj->rhs_inverse); //CHKERRQ(ierr);
     ierr = VecDuplicate(obj->rhs_inverse, &obj->sol_inverse); //CHKERRQ(ierr);
-
-    ierr = VecCreate(PETSC_COMM_WORLD, &obj->heat_generation_increment_local); //CHKERRQ(ierr);
-    ierr = VecSetSizes(obj->heat_generation_increment_local, PETSC_DECIDE, num_of_heaters); //CHKERRQ(ierr);
-    ierr = VecSetFromOptions(obj->heat_generation_increment_local); //CHKERRQ(ierr);
 
     return;
 }
@@ -225,26 +227,23 @@ void Assem_Inverse(PETSC_STRUCT *obj)
     PetscErrorCode ierr;
     ierr = MatAssemblyBegin(obj->S_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
     ierr = MatAssemblyEnd(obj->S_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
-    
-    ierr = MatAssemblyBegin(obj->R_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
-    ierr = MatAssemblyEnd(obj->R_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
-    
-    ierr = MatAssemblyBegin(obj->RS_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
-    ierr = MatAssemblyEnd(obj->RS_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
+  
+    //R_matrix only needs to be asembled once, so assembling R_matrix is done separately
+//    ierr = MatAssemblyBegin(obj->R_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
+//    ierr = MatAssemblyEnd(obj->R_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
     
     ierr = MatAssemblyBegin(obj->RSRS_regularized_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
     ierr = MatAssemblyEnd(obj->RSRS_regularized_matrix, MAT_FINAL_ASSEMBLY); //CHKERRQ(ierr);
-    
+
     //Indicate same nonzero structure of successive linear system matrices
     ierr = MatSetOption(obj->S_matrix, MAT_NO_NEW_NONZERO_LOCATIONS);
-    ierr = MatSetOption(obj->R_matrix, MAT_NO_NEW_NONZERO_LOCATIONS);
-    ierr = MatSetOption(obj->RS_matrix, MAT_NO_NEW_NONZERO_LOCATIONS);
+//    ierr = MatSetOption(obj->R_matrix, MAT_NO_NEW_NONZERO_LOCATIONS);
     ierr = MatSetOption(obj->RSRS_regularized_matrix, MAT_NO_NEW_NONZERO_LOCATIONS);
-    
+
     ierr = VecAssemblyBegin(obj->rhs_inverse); //CHKERRQ(ierr);
     ierr = VecAssemblyEnd(obj->rhs_inverse); //CHKERRQ(ierr);
-    ierr = VecAssemblyBegin(obj->heat_generation_increment_local); //CHKERRQ(ierr);
-    ierr = VecAssemblyEnd(obj->heat_generation_increment_local); //CHKERRQ(ierr);
+ //   ierr = VecAssemblyBegin(obj->heat_generation_increment_local); //CHKERRQ(ierr);
+ //   ierr = VecAssemblyEnd(obj->heat_generation_increment_local); //CHKERRQ(ierr);
 
     return;
 }
@@ -257,10 +256,10 @@ void Petsc_Solve_Inverse(PETSC_STRUCT *obj)
     ierr = KSPCreate(PETSC_COMM_WORLD,&obj->ksp_inverse); //CHKERRQ(ierr);
     
     // DIFFERENT_NONZERO_PATTERN or SAME_NONZERO_PATTERN does not change the solution. TESTED.
-    ierr = KSPSetOperators(obj->ksp_inverse,obj->RSRS_regularized_matrix,obj->RSRS_regularized_matrix, SAME_NONZERO_PATTERN); //CHKERRQ(ierr);
+    ierr = KSPSetOperators(obj->ksp_inverse, obj->RSRS_regularized_matrix, obj->RSRS_regularized_matrix, DIFFERENT_NONZERO_PATTERN); //CHKERRQ(ierr);
     ierr = KSPGetPC(obj->ksp_inverse,&obj->pc_inverse); //CHKERRQ(ierr);
     //    ierr = PCSetType(obj->pc,PCNONE); //CHKERRQ(ierr);
-    ierr = PCSetType(obj->pc_inverse,PCBJACOBI);
+    ierr = PCSetType(obj->pc_inverse,PCJACOBI);
     ierr = KSPSetTolerances(obj->ksp_inverse,1.e-7,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT); //CHKERRQ(ierr);
     ierr = KSPSetFromOptions(obj->ksp_inverse); //CHKERRQ(ierr);
     ierr = KSPSolve(obj->ksp_inverse,obj->rhs_inverse,obj->sol_inverse); //CHKERRQ(ierr);
@@ -278,10 +277,9 @@ void Petsc_Destroy_Inverse(PETSC_STRUCT *obj)
     
     ierr = MatDestroy(obj->R_matrix); //CHKERRQ(ierr);
     ierr = MatDestroy(obj->S_matrix); //CHKERRQ(ierr);
-    ierr = MatDestroy(obj->RS_matrix); //CHKERRQ(ierr);
     ierr = MatDestroy(obj->RSRS_regularized_matrix); //CHKERRQ(ierr);
     ierr = VecDestroy(obj->rhs_inverse); //CHKERRQ(ierr);
-    ierr = VecDestroy(obj->heat_generation_increment_local); //CHKERRQ(ierr);
+//    ierr = VecDestroy(obj->heat_generation_increment_local); //CHKERRQ(ierr);
 
     return;
 }

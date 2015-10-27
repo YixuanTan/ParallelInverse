@@ -13,15 +13,16 @@ typedef struct
     PETSC_MAT stiffness_matrix;
     PETSC_VEC current_temperature_field_local;
     
+    PETSC_MAT heat_matrix;
     PETSC_MAT S_matrix;
     PETSC_MAT R_matrix;
-    PETSC_MAT RS_matrix;
     PETSC_MAT RSRS_regularized_matrix;
     
     KSP ksp_inverse; /*linear solver context*/
     PC pc_inverse; /*preconditioner context*/
-    PETSC_VEC rhs_inverse; /*petsc rhs vector*/
-    PETSC_VEC sol_inverse; /*petsc solution vector*/
+    PETSC_VEC rhs_inverse;
+    PETSC_VEC sol_inverse;
+    PETSC_VEC heat_generation_increment_local;
    
 }PETSC_STRUCT;
 
