@@ -2056,8 +2056,7 @@ void InverseAnalysisMatrices::UpdateCurrents(const double heater_cross_section_a
                 int element_number = elements_as_heater[heater_element_number];
                 temperature = (*heater_elements).get_temperature_in_element(element_number, nodes_in_elements, x_coordinates, y_coordinates, current_temperature_field);
             }
-            temperature /= mesh_seeds_on_heater;
-            
+
             double resistivity_si_unit = (*temperature_dependent_variables).get_resistivity(temperature);
             
             current_density = sqrt((inverse_variables_.current_heat_generation_)[heater_number]/resistivity_si_unit); // in SI-UNITs

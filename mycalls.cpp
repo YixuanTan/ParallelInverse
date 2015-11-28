@@ -14,7 +14,7 @@ void Petsc_Init(int argc, char **args,char *help)
     PetscInt n;
     PetscMPIInt size;
     PetscInitialize(&argc,&args,(char *)0,help);
-    ierr = MPI_Comm_size(PETSC_COMM_WORLD, &size); //CHKERRQ(ierr);
+    MPI_Comm_size(PETSC_COMM_WORLD, &size); //CHKERRQ(ierr);
     ierr = PetscOptionsGetInt(PETSC_NULL,"-n",&n,PETSC_NULL); //CHKERRQ(ierr);
     return;
 }
