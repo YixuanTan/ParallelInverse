@@ -16,8 +16,10 @@ for k in xrange(0, num + 1):
 	profile = np.reshape(np.fromstring(stdout, dtype = float, sep=' '), (-1,2))
 	#print 'profile is \n', profile.shape
 	plt.plot(profile[:,0], profile[:,1], "-o")
-	plt.ylim([260, 500])
+	plt.ylim([460, 700])
 	plt.xlim([0, 10])
+	plt.hold(True)
+	plt.axvline(x=peakPos, color='r') 
 	plt.savefig(str(count) + '.png')
 	plt.gcf().clear()
 	count = count + 1

@@ -19,9 +19,9 @@ please_do_not_change_anything_other_than_the_numeric_value_of_parameters
 0.003  thickness_of_silicondioxide_
 0.0006  thickness_of_titanium_
 0.7  width_of_heater_
-273.0  ambient_temperature_
-273.0  boundary_condition_temperature_
-273.0  sample_initial_temperature_
-273.0  temperature_on_sample_left_end_
-273.0  temperature_on_sample_right_end_
+473.0  ambient_temperature_
+473.0  boundary_condition_temperature_
+473.0  sample_initial_temperature_
+473.0  temperature_on_sample_left_end_
+473.0  temperature_on_sample_right_end_
 0.45  peak_position_
