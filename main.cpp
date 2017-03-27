@@ -55,7 +55,7 @@ int Constants::kMeshSeedsAlongSTitaniumThickness_=1;
 double Constants::kMinYCoordinate_=0.0;
 double Constants::kTemperatureTolerance_ = 1.0e-5;
 double Constants::kCutoff_ = 0.98;
-double Constants::lambda_ = 1.0e-10; //0;//1.0e-11; //5.0e-11;//1.0e-11;//2.5e-12; //1e-11; //5e-12; //0;//;
+double Constants::lambda_ = 1.0e-9; //0;//1.0e-11; //5.0e-11;//1.0e-11;//2.5e-12; //1e-11; //5e-12; //0;//;
 
 class ModelGeometry{
 public:
@@ -1805,22 +1805,46 @@ void CopperSurfTemperatureDistribution::set_linear_temperature_on_sample_surface
     temperature_on_sample_surface_.clear();
     //    double slope = (temperature_on_sample_right_end-temperature_on_sample_left_end)/Constants::kLengthOfSquareDomain_;
     double left_node_x_coordinate=x_coordinates[first_node_on_sample_surface_];
+    double PEAK = left_node_x_coordinate + peakPos; // x_coordinates[first_node_on_sample_surface_ + num_of_equations_on_sample_surface_ / 2];                
     double range = 0.02 * Constants::kLengthOfSquareDomain_;
+    double grad = 100.0 / range;
     double plat = 0.02 * Constants::kLengthOfSquareDomain_;
-    double PEAK = left_node_x_coordinate + peakPos; // x_coordinates[first_node_on_sample_surface_ + num_of_equations_on_sample_surface_ / 2];
+
+    double periodLen = (Constants::kLengthOfSquareDomain_ / Constants::kNumOfHeaters_); 
+    double pos_with_highest_temperature;
+    double peak_pos_mod_period = fmod(peakPos,periodLen);
+    if(peak_pos_mod_period >= periodLen / 2) {
+        pos_with_highest_temperature = std::max(0.0, peakPos - peak_pos_mod_period + peak_pos_mod_period / 2);
+    }
+    else {
+        pos_with_highest_temperature = std::max(0.0, peakPos - peak_pos_mod_period - peak_pos_mod_period / 2);
+    }
     for(int i=0; i<num_of_equations_on_sample_surface_; i++){
-      double coordx = x_coordinates[first_node_on_sample_surface_+i];
-      if (coordx < PEAK - range - plat) {
-	temperature_on_sample_surface_.push_back(473.0);
-      } else if (coordx < PEAK - plat) {
-	temperature_on_sample_surface_.push_back(573.0 - 100.0 / range * (PEAK - plat  - coordx) );
-      } else if (coordx < PEAK + plat) {
-	temperature_on_sample_surface_.push_back(573.0);
-      } else if (coordx < PEAK + range + plat) {
-	temperature_on_sample_surface_.push_back(573.0 - 100.0 / range * (coordx - PEAK - plat) );
-      } else {
-	temperature_on_sample_surface_.push_back(473.0);
-      }
+        if(peakPos <= periodLen / 2) { // if this is the before the 1st heater
+            double coordx = x_coordinates[first_node_on_sample_surface_+i];
+            if (coordx < PEAK - range - plat) {
+                temperature_on_sample_surface_.push_back(473.0);
+            } else if (coordx < PEAK - plat) {
+                temperature_on_sample_surface_.push_back(573.0 - 100.0 / range * (PEAK - plat  - coordx) );
+            } else if (coordx < PEAK + plat) {
+                temperature_on_sample_surface_.push_back(573.0);
+            } else if (coordx < PEAK + range + plat) {
+                temperature_on_sample_surface_.push_back(573.0 - 100.0 / range * (coordx - PEAK - plat) );
+            } else {
+                temperature_on_sample_surface_.push_back(473.0);
+            }  
+        } else {
+            double coordx = x_coordinates[first_node_on_sample_surface_+i] - left_node_x_coordinate;
+            if (coordx < pos_with_highest_temperature - range - (peakPos - pos_with_highest_temperature)) {
+                temperature_on_sample_surface_.push_back(473.0);
+            } else if (coordx < pos_with_highest_temperature) {
+                temperature_on_sample_surface_.push_back(573.0 - grad * (pos_with_highest_temperature - coordx) );
+            } else if (coordx < peakPos + range) {
+                temperature_on_sample_surface_.push_back(573.0 - grad * (coordx - pos_with_highest_temperature));
+            } else {
+                temperature_on_sample_surface_.push_back(473.0);
+            }
+        }
     }
 }
 
@@ -1978,13 +2002,14 @@ int InverseAnalysisMatrices::HeatGenerationSolver(PETSC_STRUCT* obj, char *Sname
             // gap / 2 + (gap + heater) * how_many_heaters_before + heater_width / 2
             double periodLen = (Constants::kLengthOfSquareDomain_ / Constants::kNumOfHeaters_);
             double heater_pos = (heater + 1) * periodLen;
-            if(heater != 0 && (heater_pos > peakPos || heater_pos + 2 * periodLen < peakPos)) { // skip the 0th one, otherwise no heat at all!!
+            //if(heater != 0 && (heater_pos > peakPos || heater_pos + 2 * periodLen < peakPos)) { // skip the 0th one, otherwise no heat at all!!
+            if(heater != 0 && heater_pos > peakPos) { 
                 double extreme = Constants::lambda_ == 0.0 ? 5.0e-10 : 10 * Constants::lambda_; // add an extremely large regularization factor to prevent increasing heat on the rhs heaters
                 ierr = VecSetValue(extra_regularization, (PetscInt)heater, (PetscScalar)extreme, INSERT_VALUES);
-            } else if(heater !=0 && heater_pos + periodLen < peakPos) {
+            } /*else if(heater !=0 && heater_pos + periodLen < peakPos) {
                 double extreme = Constants::lambda_ == 0.0 ? 5.0e-10 : 5 * Constants::lambda_; // add an large regularization factor to prevent increasing heat on the lhs heaters
                 ierr = VecSetValue(extra_regularization, (PetscInt)heater, (PetscScalar)extreme, INSERT_VALUES);
-            }else {
+            }*/else {
                 ierr = VecSetValue(extra_regularization, (PetscInt)heater, (PetscScalar)0.0, INSERT_VALUES);
             }
         }
