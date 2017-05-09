@@ -12,14 +12,12 @@ CXX=/home/smartcoder/Documents/Programs/mpich-install/bin/mpicxx
 #If there are any .hpp files
 HS = mycalls.hpp share.hpp
 
-STUFF = -DMPICH_IGNORE_CXX_SEEK -I. -I/usr/include/ -I/usr/local/include\
+STUFF = -std=c++11 -DMPICH_IGNORE_CXX_SEEK -I. -I/usr/include/ -I/usr/local/include\
 	-I${PETSC_DIR}/include\
 	-I${PETSC_DIR}/bmake/${PETSC_ARCH}\
 	-I${MPI_PATH}/include\
 	-I/usr/local/lib
 	#-I/usr/include/X11
-
-OBJECTS = mycalls.o assem.o bookkeep.o
 
 LDFLAGS =\
 	-L/usr/lib/libblas\

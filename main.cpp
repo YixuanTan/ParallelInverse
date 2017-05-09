@@ -23,6 +23,8 @@
 #include "petscmat.h"
 #include <mpi.h>
 
+#define DEBUG_MODE 0
+
 class Constants{
 public:
     static double kLengthOfSquareDomain_;
@@ -42,7 +44,7 @@ public:
     static double lambda_;
 };
 double Constants::kLengthOfSquareDomain_ = 10.0;
-int Constants::kNumOfHeaters_ = 10;
+int Constants::kNumOfHeaters_ = 15;
 double Constants::kStefanBoltzmann_=5.6703e-11; // units mW/(mm^2 * K^4)   5.6703e-8 W*m^-2*K^-4
 int Constants::kNumOfNodesInElement_=4;
 int Constants::kNumOfDofsPerNode_=1;
@@ -55,7 +57,7 @@ int Constants::kMeshSeedsAlongSTitaniumThickness_=1;
 double Constants::kMinYCoordinate_=0.0;
 double Constants::kTemperatureTolerance_ = 1.0e-5;
 double Constants::kCutoff_ = 0.98;
-double Constants::lambda_ = 1.0e-9; //0;//1.0e-11; //5.0e-11;//1.0e-11;//2.5e-12; //1e-11; //5e-12; //0;//;
+double Constants::lambda_ = 1.0e-10; //0;//1.0e-11; //5.0e-11;//1.0e-11;//2.5e-12; //1e-11; //5e-12; //0;//;
 
 class ModelGeometry{
 public:
@@ -72,7 +74,7 @@ public:
     void set_thickness_of_copper(const double thickness_of_copper)
     {thickness_of_copper_=thickness_of_copper;}
     void set_width_of_end(const double width_of_end)
-    {width_of_end_=width_of_end;}
+    {width_of_end_ = width_of_end;}
     void set_new_width_of_end(const double width_of_end)
     {width_of_end_=width_of_end;}
     void set_width_of_heater(const double width_of_heater)
@@ -1806,9 +1808,9 @@ void CopperSurfTemperatureDistribution::set_linear_temperature_on_sample_surface
     //    double slope = (temperature_on_sample_right_end-temperature_on_sample_left_end)/Constants::kLengthOfSquareDomain_;
     double left_node_x_coordinate=x_coordinates[first_node_on_sample_surface_];
     double PEAK = left_node_x_coordinate + peakPos; // x_coordinates[first_node_on_sample_surface_ + num_of_equations_on_sample_surface_ / 2];                
-    double range = 0.02 * Constants::kLengthOfSquareDomain_;
+    double range = 0.1 * Constants::kLengthOfSquareDomain_;
     double grad = 100.0 / range;
-    double plat = 0.02 * Constants::kLengthOfSquareDomain_;
+    double plat = 0.1 * Constants::kLengthOfSquareDomain_;
 
     double periodLen = (Constants::kLengthOfSquareDomain_ / Constants::kNumOfHeaters_); 
     double pos_with_highest_temperature;
@@ -1838,12 +1840,21 @@ void CopperSurfTemperatureDistribution::set_linear_temperature_on_sample_surface
             if (coordx < pos_with_highest_temperature - range - (peakPos - pos_with_highest_temperature)) {
                 temperature_on_sample_surface_.push_back(473.0);
             } else if (coordx < pos_with_highest_temperature) {
-                temperature_on_sample_surface_.push_back(573.0 - grad * (pos_with_highest_temperature - coordx) );
+                double temp = std::max(473.0, 573.0 - grad * (pos_with_highest_temperature - coordx));
+                temperature_on_sample_surface_.push_back( temp );
             } else if (coordx < peakPos + range) {
-                temperature_on_sample_surface_.push_back(573.0 - grad * (coordx - pos_with_highest_temperature));
+                double temp = std::max(473.0, 573.0 - grad * (coordx - pos_with_highest_temperature));
+                temperature_on_sample_surface_.push_back(temp);
             } else {
                 temperature_on_sample_surface_.push_back(473.0);
             }
+            #if DEBUG_MODE
+            std::cout << "------------------\n";
+            for(int i=0; i<num_of_equations_on_sample_surface_; i++){
+                double coordx = x_coordinates[first_node_on_sample_surface_+i];
+                std::cout << coordx << " " << temperature_on_sample_surface_[i] << std::endl;
+            }
+            #endif
         }
     }
 }
