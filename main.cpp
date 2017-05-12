@@ -1664,7 +1664,7 @@ void Iterations::ZeroVectorAndMatrix(PETSC_STRUCT* obj){
 class OutputResults{
 public:
     void OutputVtkFile(Initialization*, GenerateMesh*, std::vector<double>&);
-    void OutputCopperSurfaceTemperature(Initialization*, GenerateMesh*, std::vector<double>&, double);
+    void OutputCopperSurfaceTemperature(Initialization*, GenerateMesh*, std::vector<double>&);
 };
 void OutputResults::OutputVtkFile(Initialization *const initialization, GenerateMesh *const generate_mesh, std::vector<double>& current_temperature_field){
     int num_of_nodes=(*((*initialization).get_mesh_parameters())).get_num_of_nodes();
@@ -1699,7 +1699,7 @@ void OutputResults::OutputVtkFile(Initialization *const initialization, Generate
     printf("writing to vtk file completed......\n");
 }
 
-void OutputResults::OutputCopperSurfaceTemperature(Initialization *const initialization, GenerateMesh *const generate_mesh, std::vector<double>& current_temperature_field, double peakPos){
+void OutputResults::OutputCopperSurfaceTemperature(Initialization *const initialization, GenerateMesh *const generate_mesh, std::vector<double>& current_temperature_field){
     std::vector<std::pair<double,double> > nodes_on_copper_surface;
     int num_of_nodes=(*((*initialization).get_mesh_parameters())).get_num_of_nodes();
     double y_coordinate_of_copper_surface = (*((*initialization).get_model_geometry())).get_thickness_of_csilicon()
@@ -1758,7 +1758,7 @@ class CopperSurfTemperatureDistribution{
 public:
     void InitializeCopperSurfTemperatureDistribution(int, int, int, Initialization*);
     int RCoefficientMatrix(int i, int j);
-    void set_linear_temperature_on_sample_surface(double, double, std::vector<double>&, double);
+    void set_linear_temperature_on_sample_surface(std::vector<double>&, double, double);
     void PrintOutTemperature(int);
     int get_num_of_equations_on_sample_surface() const
     {return num_of_equations_on_sample_surface_;}
@@ -1803,58 +1803,28 @@ void CopperSurfTemperatureDistribution::InitializeCopperSurfTemperatureDistribut
     equations_on_sample_surface_.resize(num_of_equations_on_sample_surface_);
 }
 
-void CopperSurfTemperatureDistribution::set_linear_temperature_on_sample_surface(double temperature_on_sample_left_end, double temperature_on_sample_right_end, std::vector<double>& x_coordinates, double peakPos){
+void CopperSurfTemperatureDistribution::set_linear_temperature_on_sample_surface(std::vector<double> &x_coordinates, double start, double end){
     temperature_on_sample_surface_.clear();
     //    double slope = (temperature_on_sample_right_end-temperature_on_sample_left_end)/Constants::kLengthOfSquareDomain_;
-    double left_node_x_coordinate=x_coordinates[first_node_on_sample_surface_];
-    double PEAK = left_node_x_coordinate + peakPos; // x_coordinates[first_node_on_sample_surface_ + num_of_equations_on_sample_surface_ / 2];                
-    double range = 0.1 * Constants::kLengthOfSquareDomain_;
-    double grad = 100.0 / range;
-    double plat = 0.1 * Constants::kLengthOfSquareDomain_;
+    double grad = 100.0 / end - start;
 
     double periodLen = (Constants::kLengthOfSquareDomain_ / Constants::kNumOfHeaters_); 
     double pos_with_highest_temperature;
-    double peak_pos_mod_period = fmod(peakPos,periodLen);
+    double peak_pos_mod_period = fmod(start, periodLen);
     if(peak_pos_mod_period >= periodLen / 2) {
-        pos_with_highest_temperature = std::max(0.0, peakPos - peak_pos_mod_period + peak_pos_mod_period / 2);
+        pos_with_highest_temperature = std::max(0.0, start - peak_pos_mod_period + peak_pos_mod_period / 2);
     }
     else {
-        pos_with_highest_temperature = std::max(0.0, peakPos - peak_pos_mod_period - peak_pos_mod_period / 2);
+        pos_with_highest_temperature = std::max(0.0, start - peak_pos_mod_period - peak_pos_mod_period / 2);
     }
+
     for(int i=0; i<num_of_equations_on_sample_surface_; i++){
-        if(peakPos <= periodLen / 2) { // if this is the before the 1st heater
-            double coordx = x_coordinates[first_node_on_sample_surface_+i];
-            if (coordx < PEAK - range - plat) {
-                temperature_on_sample_surface_.push_back(473.0);
-            } else if (coordx < PEAK - plat) {
-                temperature_on_sample_surface_.push_back(573.0 - 100.0 / range * (PEAK - plat  - coordx) );
-            } else if (coordx < PEAK + plat) {
-                temperature_on_sample_surface_.push_back(573.0);
-            } else if (coordx < PEAK + range + plat) {
-                temperature_on_sample_surface_.push_back(573.0 - 100.0 / range * (coordx - PEAK - plat) );
-            } else {
-                temperature_on_sample_surface_.push_back(473.0);
-            }  
-        } else {
-            double coordx = x_coordinates[first_node_on_sample_surface_+i] - left_node_x_coordinate;
-            if (coordx < pos_with_highest_temperature - range - (peakPos - pos_with_highest_temperature)) {
-                temperature_on_sample_surface_.push_back(473.0);
-            } else if (coordx < pos_with_highest_temperature) {
-                double temp = std::max(473.0, 573.0 - grad * (pos_with_highest_temperature - coordx));
-                temperature_on_sample_surface_.push_back( temp );
-            } else if (coordx < peakPos + range) {
-                double temp = std::max(473.0, 573.0 - grad * (coordx - pos_with_highest_temperature));
-                temperature_on_sample_surface_.push_back(temp);
-            } else {
-                temperature_on_sample_surface_.push_back(473.0);
-            }
-            #if DEBUG_MODE
-            std::cout << "------------------\n";
-            for(int i=0; i<num_of_equations_on_sample_surface_; i++){
-                double coordx = x_coordinates[first_node_on_sample_surface_+i];
-                std::cout << coordx << " " << temperature_on_sample_surface_[i] << std::endl;
-            }
-            #endif
+        double coordx = x_coordinates[first_node_on_sample_surface_+i];
+        if(pos_with_highest_temperature < coordx && coordx < end) {
+            temperature_on_sample_surface_.push_back(473.0 - grad * (coordx - pos_with_highest_temperature));
+        }
+        else {
+            temperature_on_sample_surface_.push_back(273.0);
         }
     }
 }
@@ -1923,7 +1893,7 @@ class InverseAnalysisMatrices{
 public:
     void InitializeInverseAnalysisMatrices(int, int, CopperSurfTemperatureDistribution*, PETSC_STRUCT*);
     void UpdateCurrents(const double, Initialization *, HeaterElements *, std::vector<int> &, std::vector<int> &, std::vector<double> &, std::vector<double> &, std::vector<double> &, TemperatureDependentVariables *);
-  int HeatGenerationSolver(PETSC_STRUCT *, char*, double);
+  int HeatGenerationSolver(PETSC_STRUCT *, char*, double, double);
     void SensitivityMatrixSolver(PETSC_STRUCT*, int);
     InverseVariables& get_inverse_variables(){return inverse_variables_;}
     
@@ -1958,7 +1928,7 @@ void InverseAnalysisMatrices::InitializeInverseAnalysisMatrices(const int num_of
     
 }
 
-int InverseAnalysisMatrices::HeatGenerationSolver(PETSC_STRUCT* obj, char *Sname, double peakPos){
+int InverseAnalysisMatrices::HeatGenerationSolver(PETSC_STRUCT* obj, char *Sname, double start_pos, double end_pos){
     PetscErrorCode ierr;
     
     //zero matrices and vector
@@ -2014,7 +1984,7 @@ int InverseAnalysisMatrices::HeatGenerationSolver(PETSC_STRUCT* obj, char *Sname
             double periodLen = (Constants::kLengthOfSquareDomain_ / Constants::kNumOfHeaters_);
             double heater_pos = (heater + 1) * periodLen;
             //if(heater != 0 && (heater_pos > peakPos || heater_pos + 2 * periodLen < peakPos)) { // skip the 0th one, otherwise no heat at all!!
-            if(heater != 0 && heater_pos > peakPos) { 
+            if(heater != 0 && heater_pos > (start_pos + end_pos) / 2) { 
                 double extreme = Constants::lambda_ == 0.0 ? 5.0e-10 : 10 * Constants::lambda_; // add an extremely large regularization factor to prevent increasing heat on the rhs heaters
                 ierr = VecSetValue(extra_regularization, (PetscInt)heater, (PetscScalar)extreme, INSERT_VALUES);
             } /*else if(heater !=0 && heater_pos + periodLen < peakPos) {
@@ -2240,7 +2210,8 @@ int main(int argc, char **args) {
     int output_time_step_interval=(*(initialization.get_analysis_constants())).get_output_time_step_interval();
     int num_of_nodes = (*(initialization.get_mesh_parameters())).get_num_of_nodes();
     int num_of_elements = (*(initialization.get_mesh_parameters())).get_num_of_elements();
-    double peakPos = atof(args[1]);
+    double start_pos = atof(args[1]);
+    double end_pos = atof(args[2]);
     double time_increment=initial_time_increment;
     int num_of_iterations_with_unchanged_time_increment=0;
     int iteration_number=0;
@@ -2306,8 +2277,7 @@ int main(int argc, char **args) {
     copper_surface_temperature_distribution.InitializeCopperSurfTemperatureDistribution(num_of_equations, num_of_nodes, num_of_elements, &initialization);
     double temperature_on_sample_left_end = (*(initialization.get_read_input())).get_temperature_on_sample_left_end();
     double temperature_on_sample_right_end = (*(initialization.get_read_input())).get_temperature_on_sample_right_end();
-    copper_surface_temperature_distribution.set_linear_temperature_on_sample_surface(temperature_on_sample_left_end, temperature_on_sample_right_end,
-                                                                                     x_coordinates, peakPos);
+    copper_surface_temperature_distribution.set_linear_temperature_on_sample_surface(x_coordinates, start_pos, end_pos);
     copper_surface_temperature_distribution.set_elements_on_sample_surface(num_of_elements);
     copper_surface_temperature_distribution.set_equations_on_sample_surface(equation_numbers_in_elements);
     std::vector<double>& temperature_on_sample_surface = copper_surface_temperature_distribution.get_temperature_on_sample_surface();
@@ -2372,7 +2342,7 @@ int main(int argc, char **args) {
     while(1){ // the inverse iteration loop
         inverse_iteration++;
         iteration_number = 0;
-        
+        std::cout << "inverse_iteration: "  << inverse_iteration << std::endl;
         while(1){ // this while loop governs the iterations to steady state solution
             
             iteration_number++;
@@ -2491,7 +2461,6 @@ int main(int argc, char **args) {
             MPI_Barrier(MPI_COMM_WORLD);
             // restore the current_temperature_field_local
             ierr = VecCopy(sys.sol, sys.current_temperature_field_local);
-            
 #endif
             
             // scatter the sys.current_temperature_field_local to the global current_temperature_field
@@ -2520,24 +2489,23 @@ int main(int argc, char **args) {
 #ifdef radiation
             if((double)error_norm < Constants::kNormTolerance_ && (double)rhs_norm < Constants::kYFunctionTolerance_){// convergence must be satisfied first, then consider temperature increment size.
                 MPI_Barrier(MPI_COMM_WORLD);
-//                if(rank == 0){
-//                    printf("number of iteration to converge is %d\n", iteration_number);
-//                }
+                if(rank == 0){
+                    printf("number of iteration to converge is %d\n", iteration_number);
+                }
                 MPI_Barrier(MPI_COMM_WORLD);
                 break;  // break from the while loop
             }
 #else
             if((double)error_norm < Constants::kNormTolerance_ ){// convergence must be satisfied first, then consider temperature increment size.
                 MPI_Barrier(MPI_COMM_WORLD);
-//                if(rank == 0){
-//                    printf("number of iteration to converge is %d\n", iteration_number);
-//                }
+                if(rank == 0){
+                    printf("number of iteration to converge is %d\n", iteration_number);
+                }
                 MPI_Barrier(MPI_COMM_WORLD);
                 break;  // break from the while loop
             }
 
 #endif
-            
             
         }//while
         
@@ -2557,14 +2525,11 @@ int main(int argc, char **args) {
         char *Sname = bfer;
 
 
-        if( inverse_analysis_matrices.HeatGenerationSolver(&sys, Sname, peakPos) ) {
-            break; // convergence is reached, otherwise run anlysis with the updated heat generation
-        }
-
-
+        //if( inverse_analysis_matrices.HeatGenerationSolver(&sys, Sname, start_pos, end_pos) ) {
+        inverse_analysis_matrices.HeatGenerationSolver(&sys, Sname, start_pos, end_pos);
+        break; // convergence is reached, otherwise run anlysis with the updated heat generation
 
     }
-
     //Must destroy current_temperature_field_local
     Petsc_Destroy(&sys);
     
@@ -2595,14 +2560,13 @@ int main(int argc, char **args) {
     
         // output temperature field
         //output_results.OutputVtkFile(&initialization, &generate_mesh, current_temperature_field);
-        output_results.OutputCopperSurfaceTemperature(&initialization, &generate_mesh, current_temperature_field, peakPos);
+        output_results.OutputCopperSurfaceTemperature(&initialization, &generate_mesh, current_temperature_field);
 
         //printf("Analysis completed successfully!\n");
         //printf(" a (model temperature field).vtk file, a (copper surface temperature).txt file and a (current_density).txt file have been generated\n\n");
         
     }
     
-
     Petsc_Destroy_Inverse(&sys);
     
     delete [] d_nnz; d_nnz = NULL;

@@ -4,7 +4,7 @@
 #include "mycalls.hpp"
 #include "petscmat.h"
 #include <petscksp.h>
-
+#include <iostream>
 /*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
  %% Function to initialize Petsc
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% */
@@ -151,7 +151,6 @@ void Petsc_Destroy(PETSC_STRUCT *obj)
     ierr = VecDestroy(obj->sol); //CHKERRQ(ierr);
     ierr = MatDestroy(obj->Amat); //CHKERRQ(ierr);
     ierr = KSPDestroy(obj->ksp); //CHKERRQ(ierr);
-    
 
     ierr = VecDestroy(obj->current_temperature_field_local);
     ierr = MatDestroy(obj->stiffness_matrix); //CHKERRQ(ierr);
@@ -247,12 +246,9 @@ void Petsc_Destroy_Inverse(PETSC_STRUCT *obj)
     ierr = VecDestroy(obj->rhs_inverse); //CHKERRQ(ierr);
     ierr = VecDestroy(obj->sol_inverse); //CHKERRQ(ierr);
     ierr = KSPDestroy(obj->ksp_inverse); //CHKERRQ(ierr);
-    
     ierr = MatDestroy(obj->R_matrix); //CHKERRQ(ierr);
     ierr = MatDestroy(obj->S_matrix); //CHKERRQ(ierr);
     ierr = MatDestroy(obj->RSRS_regularized_matrix); //CHKERRQ(ierr);
-    ierr = VecDestroy(obj->rhs_inverse); //CHKERRQ(ierr);
-
     return;
 }
 
