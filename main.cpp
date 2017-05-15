@@ -43,8 +43,9 @@ public:
     static double kCutoff_;
     static double lambda_;
 };
-double Constants::kLengthOfSquareDomain_ = 10.0;
-int Constants::kNumOfHeaters_ = 15;
+
+double Constants::kLengthOfSquareDomain_ = 1.0;
+int Constants::kNumOfHeaters_ = 10;
 double Constants::kStefanBoltzmann_=5.6703e-11; // units mW/(mm^2 * K^4)   5.6703e-8 W*m^-2*K^-4
 int Constants::kNumOfNodesInElement_=4;
 int Constants::kNumOfDofsPerNode_=1;
@@ -55,8 +56,8 @@ int Constants::kMaxNewtonIteration_=50;
 int Constants::kMeshSeedsAlongSiliconThickness_=5;
 int Constants::kMeshSeedsAlongSTitaniumThickness_=1;
 double Constants::kMinYCoordinate_=0.0;
-double Constants::kTemperatureTolerance_ = 1.0e-5;
-double Constants::kCutoff_ = 0.98;
+double Constants::kTemperatureTolerance_ = 1.0;
+double Constants::kCutoff_ = 0.96; //0.98;
 double Constants::lambda_ = 1.0e-10; //0;//1.0e-11; //5.0e-11;//1.0e-11;//2.5e-12; //1e-11; //5e-12; //0;//;
 
 class ModelGeometry{
@@ -1818,15 +1819,20 @@ void CopperSurfTemperatureDistribution::set_linear_temperature_on_sample_surface
         pos_with_highest_temperature = std::max(0.0, start - peak_pos_mod_period - peak_pos_mod_period / 2);
     }
 
-    for(int i=0; i<num_of_equations_on_sample_surface_; i++){
-        double coordx = x_coordinates[first_node_on_sample_surface_+i];
+    std::cout << "pos_with_highest_temperature: " << pos_with_highest_temperature << std::endl;
+
+    for(int i=0; i<num_of_equations_on_sample_surface_; i++){        
+        double coordx = x_coordinates[first_node_on_sample_surface_+i] - x_coordinates[first_node_on_sample_surface_];
+        std::cout << "pos_with_highest_temperature " << pos_with_highest_temperature << " " << coordx << " " << end << std::endl;
         if(pos_with_highest_temperature < coordx && coordx < end) {
-            temperature_on_sample_surface_.push_back(473.0 - grad * (coordx - pos_with_highest_temperature));
+            temperature_on_sample_surface_.push_back(773.0 - grad * (coordx - pos_with_highest_temperature));
         }
         else {
-            temperature_on_sample_surface_.push_back(273.0);
+            temperature_on_sample_surface_.push_back(473.0);
         }
+        std::cout << temperature_on_sample_surface_.back() << " ";
     }
+    std::cout << std::endl;
 }
 
 void CopperSurfTemperatureDistribution::set_elements_on_sample_surface(const int num_of_elements){
@@ -1893,7 +1899,7 @@ class InverseAnalysisMatrices{
 public:
     void InitializeInverseAnalysisMatrices(int, int, CopperSurfTemperatureDistribution*, PETSC_STRUCT*);
     void UpdateCurrents(const double, Initialization *, HeaterElements *, std::vector<int> &, std::vector<int> &, std::vector<double> &, std::vector<double> &, std::vector<double> &, TemperatureDependentVariables *);
-  int HeatGenerationSolver(PETSC_STRUCT *, char*, double, double);
+  bool HeatGenerationSolver(PETSC_STRUCT *, char*, double, double);
     void SensitivityMatrixSolver(PETSC_STRUCT*, int);
     InverseVariables& get_inverse_variables(){return inverse_variables_;}
     
@@ -1928,7 +1934,7 @@ void InverseAnalysisMatrices::InitializeInverseAnalysisMatrices(const int num_of
     
 }
 
-int InverseAnalysisMatrices::HeatGenerationSolver(PETSC_STRUCT* obj, char *Sname, double start_pos, double end_pos){
+bool InverseAnalysisMatrices::HeatGenerationSolver(PETSC_STRUCT* obj, char *Sname, double start_pos, double end_pos){
     PetscErrorCode ierr;
     
     //zero matrices and vector
@@ -1946,16 +1952,18 @@ int InverseAnalysisMatrices::HeatGenerationSolver(PETSC_STRUCT* obj, char *Sname
     // calculate error norm
     error_norm_current_ = pow(error_norm_current_,0.5);
     
-    if( error_norm_last_ != 0.0 && error_norm_current_/error_norm_last_ > Constants::kCutoff_ && error_norm_current_/error_norm_last_ <= 1.0){
+    //std::cout << error_norm_last_ << "  error_norm_current_/error_norm_last_ " << error_norm_current_/error_norm_last_ << "  " << count_equal_norm_time_ << std::endl;
+    if( error_norm_last_ != 0.0 && (error_norm_current_/error_norm_last_ > Constants::kCutoff_) && (error_norm_current_/error_norm_last_ <= 1.0)){
         ++count_equal_norm_time_;
     }
     else{
         count_equal_norm_time_ = 0;
     }
-    
-    if((error_norm_current_ < Constants::kTemperatureTolerance_ || count_equal_norm_time_ == 5) && error_norm_last_ != 0.0 && error_norm_current_/error_norm_last_ > Constants::kCutoff_ && error_norm_current_/error_norm_last_ <= 1.0 ){
+    std::cout << error_norm_current_ << "\t " << count_equal_norm_time_ << "\t " << error_norm_current_/error_norm_last_ << std::endl;
+    if((error_norm_current_ < Constants::kTemperatureTolerance_ || count_equal_norm_time_ >= 5) && (error_norm_last_ != 0.0 && error_norm_current_/error_norm_last_ > Constants::kCutoff_ && error_norm_current_/error_norm_last_ <= 1.01 )){
         count_equal_norm_time_ = 0;
-        return 1;
+        std::cout << "return 111" << std::endl;
+        return true;
     }
     else{
         // assemble the matrices and vectors for inverse analysis
@@ -1985,7 +1993,7 @@ int InverseAnalysisMatrices::HeatGenerationSolver(PETSC_STRUCT* obj, char *Sname
             double heater_pos = (heater + 1) * periodLen;
             //if(heater != 0 && (heater_pos > peakPos || heater_pos + 2 * periodLen < peakPos)) { // skip the 0th one, otherwise no heat at all!!
             if(heater != 0 && heater_pos > (start_pos + end_pos) / 2) { 
-                double extreme = Constants::lambda_ == 0.0 ? 5.0e-10 : 10 * Constants::lambda_; // add an extremely large regularization factor to prevent increasing heat on the rhs heaters
+                double extreme = Constants::lambda_ == 0.0 ? 5.0e-10 : 0 * Constants::lambda_; // add an extremely large regularization factor to prevent increasing heat on the rhs heaters
                 ierr = VecSetValue(extra_regularization, (PetscInt)heater, (PetscScalar)extreme, INSERT_VALUES);
             } /*else if(heater !=0 && heater_pos + periodLen < peakPos) {
                 double extreme = Constants::lambda_ == 0.0 ? 5.0e-10 : 5 * Constants::lambda_; // add an large regularization factor to prevent increasing heat on the lhs heaters
@@ -1994,7 +2002,7 @@ int InverseAnalysisMatrices::HeatGenerationSolver(PETSC_STRUCT* obj, char *Sname
                 ierr = VecSetValue(extra_regularization, (PetscInt)heater, (PetscScalar)0.0, INSERT_VALUES);
             }
         }
-        ierr = MatDiagonalSet(obj->RSRS_regularized_matrix, extra_regularization, ADD_VALUES);
+        //ierr = MatDiagonalSet(obj->RSRS_regularized_matrix, extra_regularization, ADD_VALUES);
 
 
         // construct a petsc vector for inverse_variables_.temperature_increment_
@@ -2077,13 +2085,15 @@ int InverseAnalysisMatrices::HeatGenerationSolver(PETSC_STRUCT* obj, char *Sname
     }
 
     for(int heater_number=0; heater_number<Constants::kNumOfHeaters_; heater_number++){
+        //std::cout << (inverse_variables_.current_heat_generation_)[heater_number] << " ";
         if( (inverse_variables_.current_heat_generation_)[heater_number] < 0.0){//components of current_heat_generation_ cannot be negative values.
             //printf("body heat flux set to zero !!!\n");
             (inverse_variables_.current_heat_generation_)[heater_number] = 0.0;
         }
     }
 
-    return 0;
+    std::cout << "return 2222" << std::endl;
+    return false;
 }
 
 void InverseAnalysisMatrices::UpdateCurrents(const double heater_cross_section_area_si_unit, Initialization *initialization, HeaterElements *heater_elements, std::vector<int> &elements_as_heater, std::vector<int> &nodes_in_elements, std::vector<double> &x_coordinates, std::vector<double> &y_coordinates, std::vector<double> &current_temperature_field, TemperatureDependentVariables *temperature_dependent_variables){
@@ -2525,9 +2535,10 @@ int main(int argc, char **args) {
         char *Sname = bfer;
 
 
-        //if( inverse_analysis_matrices.HeatGenerationSolver(&sys, Sname, start_pos, end_pos) ) {
-        inverse_analysis_matrices.HeatGenerationSolver(&sys, Sname, start_pos, end_pos);
-        break; // convergence is reached, otherwise run anlysis with the updated heat generation
+        if( inverse_analysis_matrices.HeatGenerationSolver(&sys, Sname, start_pos, end_pos) == true) {
+            std::cout << "are you breaking??" << std::endl;
+            break; // convergence is reached, otherwise run anlysis with the updated heat generation
+        }
 
     }
     //Must destroy current_temperature_field_local
