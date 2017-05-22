@@ -18,7 +18,7 @@ please_do_not_change_anything_other_than_the_numeric_value_of_parameters
 0.0025  thickness_of_isolater_
 0.003  thickness_of_silicondioxide_
 0.0006  thickness_of_titanium_
-0.07  width_of_heater_
+0.7  width_of_heater_
 473.0  ambient_temperature_
 473.0  boundary_condition_temperature_
 473.0  sample_initial_temperature_

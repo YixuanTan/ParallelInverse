@@ -44,8 +44,8 @@ public:
     static double lambda_;
 };
 
-double Constants::kLengthOfSquareDomain_ = 1.0;
-int Constants::kNumOfHeaters_ = 10;
+double Constants::kLengthOfSquareDomain_ = 10.0;
+int Constants::kNumOfHeaters_ = 20;
 double Constants::kStefanBoltzmann_=5.6703e-11; // units mW/(mm^2 * K^4)   5.6703e-8 W*m^-2*K^-4
 int Constants::kNumOfNodesInElement_=4;
 int Constants::kNumOfDofsPerNode_=1;
@@ -58,7 +58,7 @@ int Constants::kMeshSeedsAlongSTitaniumThickness_=1;
 double Constants::kMinYCoordinate_=0.0;
 double Constants::kTemperatureTolerance_ = 1.0;
 double Constants::kCutoff_ = 0.96; //0.98;
-double Constants::lambda_ = 1.0e-10; //0;//1.0e-11; //5.0e-11;//1.0e-11;//2.5e-12; //1e-11; //5e-12; //0;//;
+double Constants::lambda_ = 1.0e-11; //0;//1.0e-10; //5.0e-11;//1.0e-11;//2.5e-12; //1e-11; //5e-12; //0;//;
 
 class ModelGeometry{
 public:
@@ -1807,7 +1807,7 @@ void CopperSurfTemperatureDistribution::InitializeCopperSurfTemperatureDistribut
 void CopperSurfTemperatureDistribution::set_linear_temperature_on_sample_surface(std::vector<double> &x_coordinates, double start, double end){
     temperature_on_sample_surface_.clear();
     //    double slope = (temperature_on_sample_right_end-temperature_on_sample_left_end)/Constants::kLengthOfSquareDomain_;
-    double grad = 100.0 / end - start;
+    double grad = 500.0 / end - start;
 
     double periodLen = (Constants::kLengthOfSquareDomain_ / Constants::kNumOfHeaters_); 
     double pos_with_highest_temperature;
@@ -1819,20 +1819,19 @@ void CopperSurfTemperatureDistribution::set_linear_temperature_on_sample_surface
         pos_with_highest_temperature = std::max(0.0, start - peak_pos_mod_period - peak_pos_mod_period / 2);
     }
 
-    std::cout << "pos_with_highest_temperature: " << pos_with_highest_temperature << std::endl;
+    //std::cout << "pos_with_highest_temperature: " << pos_with_highest_temperature << std::endl;
 
     for(int i=0; i<num_of_equations_on_sample_surface_; i++){        
         double coordx = x_coordinates[first_node_on_sample_surface_+i] - x_coordinates[first_node_on_sample_surface_];
-        std::cout << "pos_with_highest_temperature " << pos_with_highest_temperature << " " << coordx << " " << end << std::endl;
+        //std::cout << "pos_with_highest_temperature " << pos_with_highest_temperature << " " << coordx << " " << end << std::endl;
         if(pos_with_highest_temperature < coordx && coordx < end) {
-            temperature_on_sample_surface_.push_back(773.0 - grad * (coordx - pos_with_highest_temperature));
+            //temperature_on_sample_surface_.push_back(473.0 + grad * (end - coordx));
+            temperature_on_sample_surface_.push_back(773.0);
         }
         else {
             temperature_on_sample_surface_.push_back(473.0);
         }
-        std::cout << temperature_on_sample_surface_.back() << " ";
     }
-    std::cout << std::endl;
 }
 
 void CopperSurfTemperatureDistribution::set_elements_on_sample_surface(const int num_of_elements){
@@ -1953,16 +1952,14 @@ bool InverseAnalysisMatrices::HeatGenerationSolver(PETSC_STRUCT* obj, char *Snam
     error_norm_current_ = pow(error_norm_current_,0.5);
     
     //std::cout << error_norm_last_ << "  error_norm_current_/error_norm_last_ " << error_norm_current_/error_norm_last_ << "  " << count_equal_norm_time_ << std::endl;
-    if( error_norm_last_ != 0.0 && (error_norm_current_/error_norm_last_ > Constants::kCutoff_) && (error_norm_current_/error_norm_last_ <= 1.0)){
+    if( error_norm_last_ != 0.0 && (error_norm_current_/error_norm_last_ > Constants::kCutoff_) && (error_norm_current_/error_norm_last_ <= 1.01)){
         ++count_equal_norm_time_;
     }
     else{
         count_equal_norm_time_ = 0;
     }
-    std::cout << error_norm_current_ << "\t " << count_equal_norm_time_ << "\t " << error_norm_current_/error_norm_last_ << std::endl;
     if((error_norm_current_ < Constants::kTemperatureTolerance_ || count_equal_norm_time_ >= 5) && (error_norm_last_ != 0.0 && error_norm_current_/error_norm_last_ > Constants::kCutoff_ && error_norm_current_/error_norm_last_ <= 1.01 )){
         count_equal_norm_time_ = 0;
-        std::cout << "return 111" << std::endl;
         return true;
     }
     else{
@@ -1993,16 +1990,16 @@ bool InverseAnalysisMatrices::HeatGenerationSolver(PETSC_STRUCT* obj, char *Snam
             double heater_pos = (heater + 1) * periodLen;
             //if(heater != 0 && (heater_pos > peakPos || heater_pos + 2 * periodLen < peakPos)) { // skip the 0th one, otherwise no heat at all!!
             if(heater != 0 && heater_pos > (start_pos + end_pos) / 2) { 
-                double extreme = Constants::lambda_ == 0.0 ? 5.0e-10 : 0 * Constants::lambda_; // add an extremely large regularization factor to prevent increasing heat on the rhs heaters
+                double extreme = (Constants::lambda_ == 0.0 ? 1.0e-11 : 1.0e-8 * Constants::lambda_); // add an extremely large regularization factor to prevent increasing heat on the rhs heaters
                 ierr = VecSetValue(extra_regularization, (PetscInt)heater, (PetscScalar)extreme, INSERT_VALUES);
-            } /*else if(heater !=0 && heater_pos + periodLen < peakPos) {
-                double extreme = Constants::lambda_ == 0.0 ? 5.0e-10 : 5 * Constants::lambda_; // add an large regularization factor to prevent increasing heat on the lhs heaters
+            }/*else (heater !=0 && heater_pos + periodLen < start_pos) {
+                double extreme = Constants::lambda_ == 0.0 ? 1.0e-11 : 1.0e-9 * Constants::lambda_; // add an large regularization factor to prevent increasing heat on the lhs heaters
                 ierr = VecSetValue(extra_regularization, (PetscInt)heater, (PetscScalar)extreme, INSERT_VALUES);
-            }*/else {
+            } else {
                 ierr = VecSetValue(extra_regularization, (PetscInt)heater, (PetscScalar)0.0, INSERT_VALUES);
-            }
+            }*/
         }
-        //ierr = MatDiagonalSet(obj->RSRS_regularized_matrix, extra_regularization, ADD_VALUES);
+        ierr = MatDiagonalSet(obj->RSRS_regularized_matrix, extra_regularization, ADD_VALUES);
 
 
         // construct a petsc vector for inverse_variables_.temperature_increment_
@@ -2091,8 +2088,6 @@ bool InverseAnalysisMatrices::HeatGenerationSolver(PETSC_STRUCT* obj, char *Snam
             (inverse_variables_.current_heat_generation_)[heater_number] = 0.0;
         }
     }
-
-    std::cout << "return 2222" << std::endl;
     return false;
 }
 
@@ -2352,7 +2347,6 @@ int main(int argc, char **args) {
     while(1){ // the inverse iteration loop
         inverse_iteration++;
         iteration_number = 0;
-        std::cout << "inverse_iteration: "  << inverse_iteration << std::endl;
         while(1){ // this while loop governs the iterations to steady state solution
             
             iteration_number++;
@@ -2500,7 +2494,7 @@ int main(int argc, char **args) {
             if((double)error_norm < Constants::kNormTolerance_ && (double)rhs_norm < Constants::kYFunctionTolerance_){// convergence must be satisfied first, then consider temperature increment size.
                 MPI_Barrier(MPI_COMM_WORLD);
                 if(rank == 0){
-                    printf("number of iteration to converge is %d\n", iteration_number);
+                    //printf("number of iteration to converge is %d\n", iteration_number);
                 }
                 MPI_Barrier(MPI_COMM_WORLD);
                 break;  // break from the while loop
@@ -2509,7 +2503,7 @@ int main(int argc, char **args) {
             if((double)error_norm < Constants::kNormTolerance_ ){// convergence must be satisfied first, then consider temperature increment size.
                 MPI_Barrier(MPI_COMM_WORLD);
                 if(rank == 0){
-                    printf("number of iteration to converge is %d\n", iteration_number);
+                    //printf("number of iteration to converge is %d\n", iteration_number);
                 }
                 MPI_Barrier(MPI_COMM_WORLD);
                 break;  // break from the while loop
@@ -2536,7 +2530,6 @@ int main(int argc, char **args) {
 
 
         if( inverse_analysis_matrices.HeatGenerationSolver(&sys, Sname, start_pos, end_pos) == true) {
-            std::cout << "are you breaking??" << std::endl;
             break; // convergence is reached, otherwise run anlysis with the updated heat generation
         }
 

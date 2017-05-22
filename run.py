@@ -9,17 +9,20 @@ num = (int)((last - first) / interval)
 count = 1;
 for k in xrange(0, num + 1):
 	print 'iter ', k
-	peakPos = first + k*interval
-	process = Popen('./driver ' + str(peakPos), stdout=PIPE, stderr=PIPE, shell=True)
+	start = 0.5 + 0.1 * k;
+	end = start + 1.0
+	process = Popen('./driver ' + str(start) + ' ' + str(end), stdout=PIPE, stderr=PIPE, shell=True)
 	stdout, stderr = process.communicate()
 	#print type(stdout) 
 	profile = np.reshape(np.fromstring(stdout, dtype = float, sep=' '), (-1,2))
-	#print 'profile is \n', profile.shape
+	print 'profile is \n', profile.shape
 	plt.plot(profile[:,0], profile[:,1], "-o")
-	plt.ylim([460, 700])
+	plt.ylim([400, 900])
 	plt.xlim([0, 10])
 	plt.hold(True)
-	plt.axvline(x=peakPos, color='r') 
+	plt.axvline(x=start, color='r') 
+	plt.hold(True)
+	plt.axvline(x=end, color='r') 
 	plt.savefig(str(count) + '.png')
 	plt.gcf().clear()
 	count = count + 1
