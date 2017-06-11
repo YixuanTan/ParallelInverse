@@ -45,7 +45,7 @@ public:
 };
 
 double Constants::kLengthOfSquareDomain_ = 10.0;
-int Constants::kNumOfHeaters_ = 20;
+int Constants::kNumOfHeaters_ = 50;
 double Constants::kStefanBoltzmann_=5.6703e-11; // units mW/(mm^2 * K^4)   5.6703e-8 W*m^-2*K^-4
 int Constants::kNumOfNodesInElement_=4;
 int Constants::kNumOfDofsPerNode_=1;
@@ -1807,7 +1807,7 @@ void CopperSurfTemperatureDistribution::InitializeCopperSurfTemperatureDistribut
 void CopperSurfTemperatureDistribution::set_linear_temperature_on_sample_surface(std::vector<double> &x_coordinates, double start, double end){
     temperature_on_sample_surface_.clear();
     //    double slope = (temperature_on_sample_right_end-temperature_on_sample_left_end)/Constants::kLengthOfSquareDomain_;
-    double grad = 500.0 / end - start;
+    double grad = 500.0 / (end - start);
 
     double periodLen = (Constants::kLengthOfSquareDomain_ / Constants::kNumOfHeaters_); 
     double pos_with_highest_temperature;
@@ -1825,8 +1825,9 @@ void CopperSurfTemperatureDistribution::set_linear_temperature_on_sample_surface
         double coordx = x_coordinates[first_node_on_sample_surface_+i] - x_coordinates[first_node_on_sample_surface_];
         //std::cout << "pos_with_highest_temperature " << pos_with_highest_temperature << " " << coordx << " " << end << std::endl;
         if(pos_with_highest_temperature < coordx && coordx < end) {
-            //temperature_on_sample_surface_.push_back(473.0 + grad * (end - coordx));
-            temperature_on_sample_surface_.push_back(773.0);
+            temperature_on_sample_surface_.push_back(473.0 + grad * (end - coordx));
+            if(temperature_on_sample_surface_.back() > 623.0) temperature_on_sample_surface_.back() = 623.0; 
+            //temperature_on_sample_surface_.push_back(973.0);
         }
         else {
             temperature_on_sample_surface_.push_back(473.0);
@@ -1999,7 +2000,7 @@ bool InverseAnalysisMatrices::HeatGenerationSolver(PETSC_STRUCT* obj, char *Snam
                 ierr = VecSetValue(extra_regularization, (PetscInt)heater, (PetscScalar)0.0, INSERT_VALUES);
             }*/
         }
-        ierr = MatDiagonalSet(obj->RSRS_regularized_matrix, extra_regularization, ADD_VALUES);
+        //ierr = MatDiagonalSet(obj->RSRS_regularized_matrix, extra_regularization, ADD_VALUES);
 
 
         // construct a petsc vector for inverse_variables_.temperature_increment_
